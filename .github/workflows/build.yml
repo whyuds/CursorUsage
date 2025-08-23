@@ -20,7 +20,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '18.19.0'
         cache: 'npm'
         cache-dependency-path: CursorUsage/package-lock.json
         
@@ -33,7 +33,7 @@ jobs:
       working-directory: CursorUsage
       
     - name: Install vsce
-      run: npm install -g vsce
+      run: npm install -g @vscode/vsce@2.15.0
       
     - name: Package extension
       run: vsce package
