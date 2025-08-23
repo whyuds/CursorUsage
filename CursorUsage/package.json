@@ -1,6 +1,6 @@
 {
-  "name": "cursor-usage-monitor",
-  "displayName": "Cursor Usage",
+  "name": "cursor-usage-tracker-whyuds",
+  "displayName": "Cursor Usage Tracker",
   "description": "Monitor Cursor AI usage statistics in real-time",
   "version": "1.0.0",
   "publisher": "whyuds",
