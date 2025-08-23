@@ -272,14 +272,12 @@ class CursorUsageProvider {
     // Billing period
     const startDate = formatTimestamp(Number(this.billingCycleData.startDateEpochMillis));
     const endDate = formatTimestamp(Number(this.billingCycleData.endDateEpochMillis));
-    sections.push(`📅 Billing Period: ${startDate} - ${endDate}`, "");
+    sections.push(`📅 Billing Period: ${startDate} - ${endDate}`);
 
     // Membership info
     const membershipType = this.membershipData.membershipType.toUpperCase();
     sections.push(
-      `👤 Membership: ${membershipType}`,
-      `📊 Status: ${this.membershipData.subscriptionStatus}`,
-      ""
+      `👤 Membership: ${membershipType} | 📊 Status: ${this.membershipData.subscriptionStatus}`
     );
 
     // 如果是PRO或ULTRA，显示额度信息
@@ -290,8 +288,7 @@ class CursorUsageProvider {
       const remaining = Math.max(maxAmount - totalCost, 0);
       
       sections.push(
-        `💰 Usage Quota: $${totalCost.toFixed(2)} / $${maxAmount} (${percentage.toFixed(1)}%)`,
-        `💵 Remaining: $${remaining.toFixed(2)}`,
+        `💰 Usage: $${totalCost.toFixed(2)} / $${maxAmount} (${percentage.toFixed(1)}%) | 💵 Remaining: $${remaining.toFixed(2)}`,
         ""
       );
     }
