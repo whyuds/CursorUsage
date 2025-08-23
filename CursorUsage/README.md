@@ -26,7 +26,8 @@ This extension contributes the following settings:
    - [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/hgabfbdfbpplaoakjkclmijoegfgcdli)
 2. Visit cursor.com and log in to your account
 3. The browser extension will automatically extract your session token
-4. Copy the token and paste it into the VS Code settings
+4. Return to Cursor, and the CursorUsage will automatically read your clipboard and update the configuration.
+
 
 ## Usage
 
