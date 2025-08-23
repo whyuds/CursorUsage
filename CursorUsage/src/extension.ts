@@ -121,10 +121,9 @@ function parseBrowserOutput(output: string): BrowserType {
 }
 
 function getBrowserExtensionUrl(browserType: BrowserType): string {
-  // TODO: Replace with actual extension URLs
   return browserType === 'edge' 
-    ? 'https://microsoftedge.microsoft.com/addons/detail/placeholder-edge'
-    : 'https://chromewebstore.google.com/detail/placeholder-chrome';
+    ? 'https://microsoftedge.microsoft.com/addons/detail/hgabfbdfbpplaoakjkclmijoegfgcdli'
+    : 'https://chromewebstore.google.com/detail/cursor-session-token-extr/pchppfhkjloedakahedjknknjppjpple';
 }
 
 

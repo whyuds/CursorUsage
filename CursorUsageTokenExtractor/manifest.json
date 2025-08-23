@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Automatically extract and copy WorkosCursorSessionToken from Cursor.com dashboard for IDE integration.",
   "author": "Cursor Session Token Extractor Team",
-  "homepage_url": "https://github.com/yourusername/cursor-session-extractor",
+  "homepage_url": "https://github.com/whyuds/CursorUsage",
   "permissions": [
     "activeTab",
     "storage",

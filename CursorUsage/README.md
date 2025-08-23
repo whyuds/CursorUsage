@@ -21,7 +21,9 @@ This extension contributes the following settings:
 
 ## How to Get Your Session Token
 
-1. Install the Cursor Usage Browser Extension
+1. Install the Cursor Session Token Extractor Browser Extension:
+   - [Chrome Web Store](https://chromewebstore.google.com/detail/cursor-session-token-extr/pchppfhkjloedakahedjknknjppjpple)
+   - [Microsoft Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/hgabfbdfbpplaoakjkclmijoegfgcdli)
 2. Visit cursor.com and log in to your account
 3. The browser extension will automatically extract your session token
 4. Copy the token and paste it into the VS Code settings

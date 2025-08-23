@@ -13,12 +13,12 @@ A browser extension that automatically extracts and copies the WorkosCursorSessi
 ## Installation
 
 ### From Chrome Web Store
-1. Visit the Chrome Web Store (link will be available after publication)
+1. Visit the [Chrome Web Store](https://chromewebstore.google.com/detail/cursor-session-token-extr/pchppfhkjloedakahedjknknjppjpple)
 2. Click "Add to Chrome"
 3. Confirm the installation
 
 ### From Edge Add-ons Store
-1. Visit the Microsoft Edge Add-ons Store (link will be available after publication)
+1. Visit the [Microsoft Edge Add-ons Store](https://microsoftedge.microsoft.com/addons/detail/hgabfbdfbpplaoakjkclmijoegfgcdli)
 2. Click "Get"
 3. Confirm the installation
 
