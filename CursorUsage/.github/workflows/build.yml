@@ -25,18 +25,18 @@ jobs:
         
     - name: Install dependencies
       run: npm ci
-      working-directory: D:/git/github/whyuds/CursorUsage/CursorUsage
+      working-directory: CursorUsage
         
     - name: Compile TypeScript
       run: npm run compile
-      working-directory: D:/git/github/whyuds/CursorUsage/CursorUsage
+      working-directory: CursorUsage
       
     - name: Install vsce
       run: npm install -g vsce
       
     - name: Package extension
       run: vsce package
-      working-directory: D:/git/github/whyuds/CursorUsage/CursorUsage
+      working-directory: CursorUsage
       
     - name: Get version from tag
       id: get_version
@@ -57,7 +57,7 @@ jobs:
           - Display of current billing period and usage statistics
           - Easy configuration through VS Code settings
         files: |
-          D:/git/github/whyuds/CursorUsage/CursorUsage/*.vsix
+          CursorUsage/*.vsix
         draft: false
         prerelease: false
         
@@ -65,7 +65,7 @@ jobs:
     - name: Publish to VSCode Marketplace
       run: vsce publish -p ${{ secrets.VSCE_PAT }}
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-      working-directory: D:/git/github/whyuds/CursorUsage/CursorUsage
+      working-directory: CursorUsage
       
     # Auto-publish to OpenVSX Registry
     - name: Install ovsx
@@ -75,4 +75,4 @@ jobs:
     - name: Publish to OpenVSX Registry
       run: ovsx publish *.vsix -p ${{ secrets.OVSX_PAT }}
       if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-      working-directory: D:/git/github/whyuds/CursorUsage/CursorUsage
+      working-directory: CursorUsage
