@@ -1,0 +1,35 @@
+# Cursor Usage Monitor
+
+Monitor your Cursor AI usage statistics directly in VS Code. This extension displays your current billing period usage information in the status bar.
+
+## Features
+
+- Real-time monitoring of Cursor AI usage
+- Display of current billing period and usage statistics
+- Easy configuration through VS Code settings
+
+## Requirements
+
+You need to have a Cursor account and extract your session token from Cursor.com cookies.
+
+## Extension Settings
+
+This extension contributes the following settings:
+
+* `cursorUsage.sessionToken`: The WorkosCursorSessionToken value from Cursor.com cookies
+* `cursorUsage.refreshInterval`: Interval in seconds to refresh usage data automatically (default: 300)
+
+## How to Get Your Session Token
+
+1. Install the Cursor Usage Browser Extension
+2. Visit cursor.com and log in to your account
+3. The browser extension will automatically extract your session token
+4. Copy the token and paste it into the VS Code settings
+
+## Usage
+
+Once configured, the extension will display your Cursor usage in the status bar. Click on the status bar item to refresh the data manually.
+
+## License
+
+MIT

@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "Cursor Session Token Extractor",
+  "version": "1.0.0",
+  "description": "Automatically extract and copy WorkosCursorSessionToken from Cursor.com dashboard for seamless IDE integration. Clean, minimalist design with privacy-first approach.",
+  "author": "Cursor Session Token Extractor Team",
+  "homepage_url": "https://github.com/yourusername/cursor-session-extractor",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs",
+    "cookies",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "*://*.cursor.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Cursor Session Token Extractor - Click to open dashboard",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.cursor.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icon16.png", "icon48.png", "icon128.png"],
+      "matches": ["*://*.cursor.com/*"]
+    }
+  ],
+  "minimum_chrome_version": "88"
+}

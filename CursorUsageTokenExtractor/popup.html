@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 24px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      background-color: #ffffff;
+      color: #333333;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #000000;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    .instructions {
+      font-size: 14px;
+      color: #666666;
+      line-height: 1.6;
+      background-color: #f8f9fa;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      border: 1px solid #e9ecef;
+    }
+    .instructions strong {
+      color: #000000;
+      font-weight: 600;
+    }
+    .action-btn {
+      background-color: #000000;
+      color: #ffffff;
+      border: none;
+      padding: 14px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      font-size: 15px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      letter-spacing: 0.3px;
+    }
+    .action-btn:hover {
+      background-color: #333333;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .action-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    }
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #ffffff;
+      color: #000000;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      border: 1px solid #e9ecef;
+      z-index: 1000;
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.21, 1.02, 0.73, 1);
+      pointer-events: none;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(10px);
+    }
+    .toast::before {
+      content: '✓';
+      margin-right: 8px;
+      color: #000000;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">Cursor Session Extractor</div>
+  </div>
+  
+  <div id="toast" class="toast">Copied to clipboard!</div>
+  
+  <div class="instructions">
+    <strong>How it works:</strong><br>
+    1. Click the button below to open the Cursor dashboard.<br>
+    2. The extension will automatically find and copy the session token.<br>
+    3. Return to Cursor, and the CursorUsage extension will automatically read your clipboard and update the configuration.
+  </div>
+  
+  <button id="actionBtn" class="action-btn">Go to Cursor Dashboard</button>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
