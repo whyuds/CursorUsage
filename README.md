@@ -2,6 +2,8 @@
 
 一个完整的Cursor AI使用量监控解决方案，包含浏览器扩展和VSCode扩展，帮助开发者实时监控和管理Cursor AI的使用情况。
 
+![Cursor Usage Monitor Demo](CursorUsage/img/cursorusage.gif)
+
 ## 📋 项目概述
 
 这个项目包含两个主要组件：

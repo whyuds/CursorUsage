@@ -1,6 +1,8 @@
 # Cursor Usage Monitor
 
-Monitor your Cursor AI usage statistics directly in VS Code. This extension displays your current billing period usage information in the status bar.
+No need to manually obtain or set cookies, the entire process is automated. Monitor your Cursor AI usage statistics directly in VS Code. This extension displays your current billing period usage information in the status bar.
+
+![Cursor Usage Monitor Demo](img/cursorusage.gif)
 
 ## Features
 
