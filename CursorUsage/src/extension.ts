@@ -73,6 +73,11 @@ function formatTimestamp(timestamp: number): string {
   });
 }
 
+function formatTokensInMillions(tokens: number): string {
+  const millions = tokens / 1000000;
+  return `${millions.toFixed(2)}M`;
+}
+
 // ==================== 浏览器检测 ====================
 type BrowserType = 'chrome' | 'edge' | 'unknown';
 
@@ -244,7 +249,7 @@ class CursorUsageProvider {
     if (membershipType === 'PRO' || membershipType === 'ULTRA') {
       const maxAmount = membershipType === 'PRO' ? 20 : 400;
       const percentage = Math.min((totalCost / maxAmount) * 100, 100);
-      this.statusBarItem.text = `⚡ ${membershipType}: $${totalCost.toFixed(2)}/${maxAmount} (${percentage.toFixed(1)}%)`;
+      this.statusBarItem.text = `⚡ ${membershipType}: $${totalCost.toFixed(2)} (${percentage.toFixed(1)}%)`;
     } else {
       this.statusBarItem.text = `⚡ ${membershipType}: $${totalCost.toFixed(2)}`;
     }
@@ -257,7 +262,7 @@ class CursorUsageProvider {
   private buildDetailedTooltip(): string {
     if (!this.usageData || !this.membershipData || !this.billingCycleData) {
       return "⚡ Cursor Usage Summary\n" +
-             "━".repeat(40) + "\n" +
+             "━".repeat(30) + "\n" +
              "Click to configure session token\n\n" +
              "💡 Usage Tips:\n" +
              "• Single click to refresh\n" +
@@ -266,64 +271,46 @@ class CursorUsageProvider {
 
     const sections: string[] = [
       "⚡ Cursor Usage Summary",
-      "━".repeat(40)
+      "━".repeat(30)
     ];
 
-    // Billing period
+    // Billing period (简化显示)
     const startDate = formatTimestamp(Number(this.billingCycleData.startDateEpochMillis));
     const endDate = formatTimestamp(Number(this.billingCycleData.endDateEpochMillis));
-    sections.push(`📅 Billing Period: ${startDate} - ${endDate}`);
+    sections.push(`📅 ${startDate} - ${endDate}`);
 
-    // Membership info
+    // Membership info (简化显示)
     const membershipType = this.membershipData.membershipType.toUpperCase();
-    sections.push(
-      `👤 Membership: ${membershipType} | 📊 Status: ${this.membershipData.subscriptionStatus}`
-    );
+    sections.push(`👤 ${membershipType} | ${this.membershipData.subscriptionStatus}`, "");
 
-    // 如果是PRO或ULTRA，显示额度信息
-    if (membershipType === 'PRO' || membershipType === 'ULTRA') {
-      const totalCost = this.usageData.totalCostCents / 100;
-      const maxAmount = membershipType === 'PRO' ? 20 : 400;
-      const percentage = Math.min((totalCost / maxAmount) * 100, 100);
-      const remaining = Math.max(maxAmount - totalCost, 0);
-      
-      sections.push(
-        `💰 Usage: $${totalCost.toFixed(2)} / $${maxAmount} (${percentage.toFixed(1)}%) | 💵 Remaining: $${remaining.toFixed(2)}`,
-        ""
-      );
-    }
-
-    // Model usage details
+    // Model usage details (简化只显示Total Tokens和Cost)
     sections.push("🤖 Model Usage:");
     this.usageData.aggregations.forEach(agg => {
       const modelName = agg.modelIntent;
-      const inputTokens = Number(agg.inputTokens || 0) + Number(agg.cacheWriteTokens);
-      const outputTokens = Number(agg.outputTokens);
-      const cacheReadTokens = Number(agg.cacheReadTokens);
+      const totalTokens = Number(agg.inputTokens || 0) + Number(agg.outputTokens) + 
+                         Number(agg.cacheWriteTokens) + Number(agg.cacheReadTokens);
       const cost = agg.totalCents / 100;
 
       sections.push(
-        `▸ ${modelName}: 📥${inputTokens.toLocaleString()} 📤${outputTokens.toLocaleString()} 🔄${cacheReadTokens.toLocaleString()} 💸$${cost.toFixed(2)}`
+        `• ${modelName}: ${formatTokensInMillions(totalTokens)} tokens | $${cost.toFixed(2)}`
       );
     });
     sections.push("");
 
-    // Total summary
+    // Total summary (简化显示)
     const totalCost = this.usageData.totalCostCents / 100;
+    const totalTokens = Number(this.usageData.totalInputTokens) + 
+                       Number(this.usageData.totalOutputTokens) + 
+                       Number(this.usageData.totalCacheReadTokens);
+    
     sections.push(
-      "📋 Total Summary:",
-      `  📥 Total Input: ${Number(this.usageData.totalInputTokens).toLocaleString()}`,
-      `  📤 Total Output: ${Number(this.usageData.totalOutputTokens).toLocaleString()}`,
-      `  🔄 Total Cache Read: ${Number(this.usageData.totalCacheReadTokens).toLocaleString()}`,
-      `  💸 Total Cost: $${totalCost.toFixed(2)}`,
+      `📊 Total: ${formatTokensInMillions(totalTokens)} Cost: $${totalCost.toFixed(2)}`,
       ""
     );
 
     sections.push(
-      "━".repeat(40),
-      "💡 Usage Tips:",
-      "• Single click to refresh",
-      "• Double click to configure"
+      "━".repeat(30),
+      "💡 Tips: Single click refresh | Double click configure"
     );
     
     return sections.join("\n");
