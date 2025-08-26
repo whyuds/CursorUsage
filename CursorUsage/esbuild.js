@@ -21,11 +21,14 @@ const extensionConfig = {
   format: 'cjs',
   entryPoints: ['./src/extension.ts'],
   outfile: './out/extension.js',
-  external: ['vscode'],
+  external: [
+    'vscode',
+    'chokidar',
+    'fs-extra'
+  ],
   define: {
     'process.env.NODE_ENV': '"production"'
-  },
-  drop: ['console', 'debugger'], // 移除 console 和 debugger 语句
+  }
 };
 
 // Build start
