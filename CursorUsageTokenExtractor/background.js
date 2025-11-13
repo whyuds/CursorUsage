@@ -1,6 +1,17 @@
 // Background script to monitor for the session cookie
 let extractedSession = null;
 
+function isCursorDashboard(url) {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.endsWith('cursor.com')) return false;
+    const path = u.pathname.toLowerCase();
+    return path.endsWith('/dashboard') || /\/dashboard\/?$/.test(path);
+  } catch {
+    return false;
+  }
+}
+
 // Function to extract session from cookies and auto-copy to clipboard
 async function extractSessionFromCookies() {
   try {
@@ -71,7 +82,7 @@ function notifyPageSessionCopied() {
 
 // Listen for tab updates to trigger cookie extraction
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url && tab.url.includes('cursor.com/dashboard')) {
+  if (changeInfo.status === 'complete' && tab.url && isCursorDashboard(tab.url)) {
     extractSessionFromCookies();
   }
 });
