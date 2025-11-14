@@ -45,6 +45,20 @@ interface UsageResponse {
   totalCostCents: number;
 }
 
+interface UsageSummaryResponse {
+  billingCycleStart: string;
+  billingCycleEnd: string;
+  membershipType: string;
+  individualUsage: {
+    plan: {
+      enabled: boolean;
+      used: number;
+      limit: number;
+      remaining: number;
+    };
+  };
+}
+
 type BrowserType = 'chrome' | 'edge' | 'unknown';
 
 // ==================== 常量定义 ====================
@@ -145,42 +159,24 @@ class TooltipGenerator {
     }
   }
 
-  static buildTooltipFromData(
-    usageData: UsageResponse,
-    membershipData: MembershipResponse,
+  static buildTooltipFromSummary(
+    summary: UsageSummaryResponse,
     billingCycleData: BillingCycleResponse
   ): string {
-    const membershipType = membershipData.membershipType.toUpperCase();
+    const membershipType = summary.membershipType.toUpperCase();
     const label = this.getSubscriptionTypeLabel(membershipType);
-    const used = usageData.totalCostCents / 100;
-    const limit = CONFIG.MEMBERSHIP_LIMITS[membershipType as keyof typeof CONFIG.MEMBERSHIP_LIMITS] ?? 0;
-    const progressInfo = this.buildProgressBar(used, limit);
+    const usedCents = summary.individualUsage.plan.used;
+    const limitCents = summary.individualUsage.plan.limit;
+    const usedDollars = usedCents / 100;
+    const limitDollars = limitCents / 100;
+    const limitWholeDollars = Math.round(limitDollars);
+    const progressInfo = this.buildProgressBar(usedDollars, limitDollars);
 
-    const header = limit > 0
-      ? `${label} ($${used.toFixed(2)}/$${limit.toFixed(0)})  Expire: ${this.formatTimestamp(Number(billingCycleData.endDateEpochMillis))}`
-      : `${label} ($${used.toFixed(2)})  Expire: ${this.formatTimestamp(Number(billingCycleData.endDateEpochMillis))}`;
+    const header = `${label} (${usedDollars.toFixed(2)}/${limitWholeDollars})  Expire: ${this.formatTimestamp(Number(billingCycleData.endDateEpochMillis))}`;
 
     const lines: string[] = [];
     lines.push(header);
-    if (limit > 0) {
-      lines.push(`[${progressInfo.progressBar}] ${progressInfo.percentage}%`);
-    }
-
-    const sortedAggs = usageData.aggregations.slice().sort((a, b) => b.totalCents - a.totalCents);
-    const topAggs = sortedAggs.slice(0, 5);
-    if (topAggs.length > 0) {
-      lines.push("Models:");
-      topAggs.forEach((agg) => {
-        const totalTokens = Number(agg.inputTokens || 0) + Number(agg.outputTokens) + Number(agg.cacheWriteTokens) + Number(agg.cacheReadTokens);
-        const cost = agg.totalCents / 100;
-        lines.push(`• ${agg.modelIntent}: $${cost.toFixed(2)} | ${Utils.formatTokensInMillions(totalTokens)} tokens`);
-      });
-      const remaining = sortedAggs.length - topAggs.length;
-      if (remaining > 0) {
-        lines.push(`… and ${remaining} more models`);
-      }
-    }
-
+    lines.push(`[${progressInfo.progressBar}] ${progressInfo.percentage}%`);
     lines.push("", this.buildTimeSection(new Date()));
     return lines.join("\n");
   }
@@ -244,6 +240,18 @@ class CursorApiService {
     };
   }
 
+  static async fetchUsageSummary(sessionToken: string): Promise<UsageSummaryResponse> {
+    const response = await axios.get<UsageSummaryResponse>(
+      `${CONFIG.API_BASE_URL}/usage-summary`,
+      {
+        headers: this.createHeaders(sessionToken, 'https://cursor.com'),
+        timeout: CONFIG.API_TIMEOUT
+      }
+    );
+    Utils.logWithTime('获取使用汇总成功');
+    return response.data;
+  }
+
   static async fetchMembershipData(sessionToken: string): Promise<MembershipResponse> {
     const response = await axios.get<MembershipResponse>(
       `${CONFIG.API_BASE_URL}/auth/stripe`,
@@ -253,39 +261,6 @@ class CursorApiService {
       }
     );
     Utils.logWithTime('获取会员信息成功');
-    return response.data;
-  }
-
-  static async fetchBillingCycle(sessionToken: string): Promise<BillingCycleResponse> {
-    const response = await axios.post<BillingCycleResponse>(
-      `${CONFIG.API_BASE_URL}/dashboard/get-current-billing-cycle`,
-      {},
-      {
-        headers: this.createHeaders(sessionToken),
-        timeout: CONFIG.API_TIMEOUT
-      }
-    );
-    Utils.logWithTime('获取账单周期成功');
-    return response.data;
-  }
-
-  static async fetchUsageData(
-    sessionToken: string, 
-    billingCycle: BillingCycleResponse
-  ): Promise<UsageResponse> {
-    const response = await axios.post<UsageResponse>(
-      `${CONFIG.API_BASE_URL}/dashboard/get-aggregated-usage-events`,
-      {
-        teamId: -1,
-        startDate: Number(billingCycle.startDateEpochMillis),
-        endDate: Number(billingCycle.endDateEpochMillis)
-      },
-      {
-        headers: this.createHeaders(sessionToken, 'https://cursor.com/dashboard?tab=usage'),
-        timeout: CONFIG.API_TIMEOUT
-      }
-    );
-    Utils.logWithTime('获取使用量数据成功');
     return response.data;
   }
 }
@@ -312,25 +287,20 @@ class StatusBarManager {
     this.statusBarItem.tooltip = "Click to configure Cursor session token\n\nSingle click: Refresh\nDouble click: Configure";
   }
 
-  setUsageData(
-    usageData: UsageResponse, 
-    membershipData: MembershipResponse, 
+  setUsageSummary(
+    summary: UsageSummaryResponse,
     billingCycleData: BillingCycleResponse
   ): void {
-    const totalCost = usageData.totalCostCents / 100;
-    const membershipType = membershipData.membershipType.toUpperCase();
-    
-    // 设置状态栏文本
-    if (membershipType === 'PRO' || membershipType === 'ULTRA') {
-      const maxAmount = CONFIG.MEMBERSHIP_LIMITS[membershipType as keyof typeof CONFIG.MEMBERSHIP_LIMITS];
-      const percentage = Math.min((totalCost / maxAmount) * 100, 100);
-      this.statusBarItem.text = `⚡ ${membershipType}: $${totalCost.toFixed(2)} (${percentage.toFixed(1)}%)`;
-    } else {
-      this.statusBarItem.text = `⚡ ${membershipType}: $${totalCost.toFixed(2)}`;
-    }
-    
+    const membershipType = summary.membershipType.toUpperCase();
+    const usedCents = summary.individualUsage.plan.used;
+    const limitCents = summary.individualUsage.plan.limit;
+    const usedDollars = usedCents / 100;
+    const limitDollars = limitCents / 100;
+    const limitWholeDollars = Math.round(limitDollars);
+    const percentage = limitCents > 0 ? Math.min((usedCents / limitCents) * 100, 100) : 0;
+    this.statusBarItem.text = `⚡ ${membershipType}: ${usedDollars.toFixed(2)}/${limitWholeDollars} (${percentage.toFixed(1)}%)`;
     this.statusBarItem.color = undefined;
-    this.statusBarItem.tooltip = TooltipGenerator.buildTooltipFromData(usageData, membershipData, billingCycleData);
+    this.statusBarItem.tooltip = TooltipGenerator.buildTooltipFromSummary(summary, billingCycleData);
   }
 
   dispose(): void {
@@ -340,9 +310,8 @@ class StatusBarManager {
 
 // ==================== 主类 ====================
 class CursorUsageProvider {
-  private membershipData: MembershipResponse | null = null;
   private billingCycleData: BillingCycleResponse | null = null;
-  private usageData: UsageResponse | null = null;
+  private summaryData: UsageSummaryResponse | null = null;
   private retryTimer: NodeJS.Timeout | null = null;
   private clickTimer: NodeJS.Timeout | null = null;
   private statusBarManager: StatusBarManager;
@@ -410,11 +379,11 @@ class CursorUsageProvider {
       return;
     }
 
-    if (!this.usageData || !this.membershipData || !this.billingCycleData) {
+    if (!this.summaryData || !this.billingCycleData) {
       return;
     }
 
-    this.statusBarManager.setUsageData(this.usageData, this.membershipData, this.billingCycleData);
+    this.statusBarManager.setUsageSummary(this.summaryData, this.billingCycleData);
   }
 
   // ==================== API 调用 ====================
@@ -426,17 +395,14 @@ class CursorUsageProvider {
         return;
       }
 
-      // 并行获取会员信息和账单周期
-      const [membershipData, billingCycleData] = await Promise.all([
-        CursorApiService.fetchMembershipData(sessionToken),
-        CursorApiService.fetchBillingCycle(sessionToken)
-      ]);
-
-      this.membershipData = membershipData;
-      this.billingCycleData = billingCycleData;
-
-      // 获取使用量数据
-      this.usageData = await CursorApiService.fetchUsageData(sessionToken, billingCycleData);
+      const summary = await CursorApiService.fetchUsageSummary(sessionToken);
+      const startMillis = new Date(summary.billingCycleStart).getTime();
+      const endMillis = new Date(summary.billingCycleEnd).getTime();
+      this.billingCycleData = {
+        startDateEpochMillis: String(startMillis),
+        endDateEpochMillis: String(endMillis)
+      };
+      this.summaryData = summary;
 
       this.updateStatusBar();
       this.resetRefreshState();
