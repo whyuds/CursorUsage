@@ -105,6 +105,87 @@ class Utils {
   }
 }
 
+class TooltipGenerator {
+  static formatTimestamp(timestampInMillis: number): string {
+    const date = new Date(timestampInMillis);
+    const y = date.getFullYear();
+    const m = (date.getMonth() + 1).toString().padStart(2, "0");
+    const d = date.getDate().toString().padStart(2, "0");
+    const h = date.getHours().toString().padStart(2, "0");
+    const min = date.getMinutes().toString().padStart(2, "0");
+    return `${y}/${m}/${d} ${h}:${min}`;
+  }
+
+  static buildProgressBar(used: number, limit: number): { progressBar: string; percentage: number } {
+    const percentage = limit > 0 ? Math.round((used / limit) * 100) : 0;
+    const progressBarLength = 25;
+    const filledLength = limit > 0 ? Math.round((used / limit) * progressBarLength) : 0;
+    const clampedFilled = Math.max(0, Math.min(filledLength, progressBarLength));
+    const progressBar = "█".repeat(clampedFilled) + "░".repeat(progressBarLength - clampedFilled);
+    return { progressBar, percentage: Math.min(percentage, 100) };
+  }
+
+  static buildTimeSection(currentTime: Date): string {
+    const mm = (currentTime.getMonth() + 1).toString().padStart(2, "0");
+    const dd = currentTime.getDate().toString().padStart(2, "0");
+    const hh = currentTime.getHours().toString().padStart(2, "0");
+    const min = currentTime.getMinutes().toString().padStart(2, "0");
+    const updateTime = `${mm}/${dd} ${hh}:${min}`;
+    return `${" ".repeat(50)}🕐 ${updateTime}`;
+  }
+
+  static getSubscriptionTypeLabel(membershipType: string): string {
+    switch (membershipType.toUpperCase()) {
+      case "PRO":
+        return "Pro Plan";
+      case "ULTRA":
+        return "Ultra Plan";
+      default:
+        return membershipType || "Unknown";
+    }
+  }
+
+  static buildTooltipFromData(
+    usageData: UsageResponse,
+    membershipData: MembershipResponse,
+    billingCycleData: BillingCycleResponse
+  ): string {
+    const membershipType = membershipData.membershipType.toUpperCase();
+    const label = this.getSubscriptionTypeLabel(membershipType);
+    const used = usageData.totalCostCents / 100;
+    const limit = CONFIG.MEMBERSHIP_LIMITS[membershipType as keyof typeof CONFIG.MEMBERSHIP_LIMITS] ?? 0;
+    const progressInfo = this.buildProgressBar(used, limit);
+
+    const header = limit > 0
+      ? `${label} ($${used.toFixed(2)}/$${limit.toFixed(0)})  Expire: ${this.formatTimestamp(Number(billingCycleData.endDateEpochMillis))}`
+      : `${label} ($${used.toFixed(2)})  Expire: ${this.formatTimestamp(Number(billingCycleData.endDateEpochMillis))}`;
+
+    const lines: string[] = [];
+    lines.push(header);
+    if (limit > 0) {
+      lines.push(`[${progressInfo.progressBar}] ${progressInfo.percentage}%`);
+    }
+
+    const sortedAggs = usageData.aggregations.slice().sort((a, b) => b.totalCents - a.totalCents);
+    const topAggs = sortedAggs.slice(0, 5);
+    if (topAggs.length > 0) {
+      lines.push("Models:");
+      topAggs.forEach((agg) => {
+        const totalTokens = Number(agg.inputTokens || 0) + Number(agg.outputTokens) + Number(agg.cacheWriteTokens) + Number(agg.cacheReadTokens);
+        const cost = agg.totalCents / 100;
+        lines.push(`• ${agg.modelIntent}: $${cost.toFixed(2)} | ${Utils.formatTokensInMillions(totalTokens)} tokens`);
+      });
+      const remaining = sortedAggs.length - topAggs.length;
+      if (remaining > 0) {
+        lines.push(`… and ${remaining} more models`);
+      }
+    }
+
+    lines.push("", this.buildTimeSection(new Date()));
+    return lines.join("\n");
+  }
+}
+
 // ==================== 浏览器检测 ====================
 class BrowserDetector {
   static async detectDefaultBrowser(): Promise<BrowserType> {
@@ -249,49 +330,7 @@ class StatusBarManager {
     }
     
     this.statusBarItem.color = undefined;
-    this.statusBarItem.tooltip = this.buildDetailedTooltip(usageData, membershipData, billingCycleData);
-  }
-
-  private buildDetailedTooltip(
-    usageData: UsageResponse, 
-    membershipData: MembershipResponse, 
-    billingCycleData: BillingCycleResponse
-  ): string {
-    const sections = [
-      "⚡ Cursor Usage Summary",
-      "━".repeat(30),
-      // 账单周期
-      `📅 ${Utils.formatTimestamp(Number(billingCycleData.startDateEpochMillis))} - ${Utils.formatTimestamp(Number(billingCycleData.endDateEpochMillis))}`,
-      // 会员信息
-      `👤 ${membershipData.membershipType.toUpperCase()} | ${membershipData.subscriptionStatus}`,
-      "",
-      // 模型使用详情
-      "🤖 Model Usage:"
-    ];
-
-    // 添加每个模型的使用情况
-    usageData.aggregations.forEach(agg => {
-      const totalTokens = Number(agg.inputTokens || 0) + Number(agg.outputTokens) + 
-                         Number(agg.cacheWriteTokens) + Number(agg.cacheReadTokens);
-      const cost = agg.totalCents / 100;
-      sections.push(`• ${agg.modelIntent}: ${Utils.formatTokensInMillions(totalTokens)} tokens | $${cost.toFixed(2)}`);
-    });
-
-    // 总计
-    const totalCost = usageData.totalCostCents / 100;
-    const totalTokens = Number(usageData.totalInputTokens) + 
-                       Number(usageData.totalOutputTokens) + 
-                       Number(usageData.totalCacheReadTokens);
-    
-    sections.push(
-      "",
-      `📊 Total: ${Utils.formatTokensInMillions(totalTokens)} Cost: $${totalCost.toFixed(2)}`,
-      "",
-      "━".repeat(30),
-      "💡 Tips: Single click refresh | Double click configure"
-    );
-    
-    return sections.join("\n");
+    this.statusBarItem.tooltip = TooltipGenerator.buildTooltipFromData(usageData, membershipData, billingCycleData);
   }
 
   dispose(): void {
