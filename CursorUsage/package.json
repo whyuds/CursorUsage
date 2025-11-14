@@ -2,7 +2,7 @@
   "name": "cursor-usage-tracker-whyuds",
   "displayName": "Cursor Usage Tracker",
   "description": "Monitor Cursor AI usage statistics in real-time",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "whyuds",
   "repository": {
     "type": "git",
