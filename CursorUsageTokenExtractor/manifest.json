@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cursor Session Token Extractor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Automatically extract and copy WorkosCursorSessionToken from Cursor.com dashboard for IDE integration.",
   "author": "Cursor Session Token Extractor Team",
   "homepage_url": "https://github.com/whyuds/CursorUsage",
