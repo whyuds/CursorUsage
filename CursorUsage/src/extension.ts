@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as cp from 'child_process';
 import axios from 'axios';
-import WebSocket from 'ws';
 import * as path from 'path';
 import * as fs from 'fs-extra';
 import * as crypto from 'crypto';
@@ -295,7 +294,6 @@ class CursorApiService {
 }
 
 class TeamServerClient {
-  private static ws: WebSocket | null = null;
   private static hb: NodeJS.Timeout | null = null;
 
   static async postUsage(serverUrl: string, payload: any): Promise<void> {
@@ -309,43 +307,29 @@ class TeamServerClient {
     }
   }
 
-  static startPing(serverUrl: string, email: string, userId: number, host: string, platform: string): void {
+  static async setOnline(serverUrl: string, email: string, userId: number, host: string, platform: string): Promise<void> {
     const base = serverUrl.replace(/\/+$/, '');
-    const wsUrl = base.startsWith('https://')
-      ? `wss://${base.substring('https://'.length)}`
-      : base.startsWith('http://')
-        ? `ws://${base.substring('http://'.length)}`
-        : `ws://${base}`;
-    const url = `${wsUrl}/ws/ping`;
     try {
-      Utils.logWithTime(`Connecting WS ping to ${url}`);
-      this.ws = new WebSocket(url);
-      this.ws.on('open', () => {
-        const init = JSON.stringify({ type: 'init', email, userId, host, platform });
-        this.ws?.send(init);
-        Utils.logWithTime(`WS ping connected`);
-        this.hb = setInterval(() => {
-          try {
-            this.ws?.send(JSON.stringify({ type: 'ping', email, userId }));
-          } catch {}
-        }, 30000);
-      });
-      const cleanup = () => {
-        if (this.hb) { clearInterval(this.hb); this.hb = null; }
-        this.ws = null;
-        Utils.logWithTime(`WS ping disconnected`);
-      };
-      this.ws.on('close', cleanup);
-      this.ws.on('error', cleanup);
+      await axios.post(`${base}/api/usage/ping`, { email, userId, host, platform }, { timeout: 3000 });
     } catch {}
   }
 
-  static stopPing(): void {
+  static async setOffline(serverUrl: string, email: string, userId: number): Promise<void> {
+    const base = serverUrl.replace(/\/+$/, '');
     try {
-      if (this.hb) { clearInterval(this.hb); this.hb = null; }
-      this.ws?.close();
-      this.ws = null;
+      await axios.post(`${base}/api/usage/offline`, { email, userId }, { timeout: 3000 });
     } catch {}
+  }
+
+  static startHeartbeat(serverUrl: string, email: string, userId: number, host: string, platform: string): void {
+    if (this.hb) { clearInterval(this.hb); this.hb = null; }
+    this.hb = setInterval(() => {
+      this.setOnline(serverUrl, email, userId, host, platform);
+    }, 30000);
+  }
+
+  static stopHeartbeat(): void {
+    if (this.hb) { clearInterval(this.hb); this.hb = null; }
   }
 }
 
@@ -428,7 +412,8 @@ class CursorUsageProvider {
       if (!url) return;
       const me = await CursorApiService.fetchUserInfo(sessionToken);
       this.userInfo = { userId: me.userId, email: me.email, createdAt: me.createdAt };
-      TeamServerClient.startPing(url, me.email, me.userId, os.hostname(), os.platform());
+      await TeamServerClient.setOnline(url, me.email, me.userId, os.hostname(), os.platform());
+      TeamServerClient.startHeartbeat(url, me.email, me.userId, os.hostname(), os.platform());
     } catch {}
   }
 
@@ -592,7 +577,13 @@ class CursorUsageProvider {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-    TeamServerClient.stopPing();
+    try {
+      const url = Utils.getTeamServerUrl();
+      if (url && this.userInfo) {
+        TeamServerClient.setOffline(url, this.userInfo.email, this.userInfo.userId);
+      }
+    } catch {}
+    TeamServerClient.stopHeartbeat();
     this.statusBarManager.dispose();
   }
 }

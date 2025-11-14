@@ -30,26 +30,29 @@
 ```
 - 响应: `200 OK`
 
-## 心跳长链接
-- 路径: `ws://<server-host>/ws/ping`
-- 建链后发送初始化报文:
+## 在线心跳（HTTP）
+- 路径: `POST /api/usage/ping`
+- 请求体示例:
 ```json
 {
-  "type": "init",
   "email": "1459189802@qq.com",
   "userId": 260960778,
   "host": "DESKTOP-ABC",
   "platform": "win32"
 }
 ```
-- 每 30 秒发送心跳报文:
+- 作用: upsert 到 `cursor_user_state`，设置 `online=1`，更新 `last_seen`
+
+## 离线标记（HTTP）
+- 路径: `POST /api/usage/offline`
+- 请求体示例:
 ```json
 {
-  "type": "ping",
   "email": "1459189802@qq.com",
   "userId": 260960778
 }
 ```
+- 作用: upsert 到 `cursor_user_state`，设置 `online=0`，更新 `last_seen`
 
 ## 数据库 DDL
 ```sql
@@ -94,7 +97,12 @@ CREATE TABLE IF NOT EXISTS cursor_user_state (
 ## 扩展侧投递逻辑说明
 - 扩展设置项 `cursorUsage.teamServerUrl` 默认为空；为空则不进行任何投递或心跳
 - 每次刷新成功后向 `POST /api/usage/log` 投递一次使用量快照
-- 启动后若配置了 `teamServerUrl`，建立 `ws://<server-host>/ws/ping` 长链接并每 30 秒发送心跳
+- 扩展激活后立即 `POST /api/usage/ping` 设置在线，并每 30 秒继续 `ping`
+- 扩展停用（deactivate）时 `POST /api/usage/offline` 设置离线
+
+## 定时离线策略
+- 服务端每 2 分钟扫描一次，将 `last_seen` 早于 2 分钟的在线用户置为离线
+- 参数：`user.state.offlineSeconds=120`，`user.state.scanDelayMillis=120000`
 
 ## Cursor get-me 示例
 ```json

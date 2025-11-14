@@ -3,6 +3,7 @@ package com.whyuds.cursor.api;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,6 +49,38 @@ public class UsageController {
       req.email, req.userId, created, expires, req.totalLimitCents, req.usedCents, req.remainingCents, req.host, req.platform
     );
 
+    return ResponseEntity.ok().build();
+  }
+
+  public static class PingRequest {
+    public Long userId;
+    public String email;
+    public String host;
+    public String platform;
+  }
+
+  @PostMapping("/ping")
+  public ResponseEntity<?> ping(@RequestBody PingRequest req) {
+    jdbc.update(
+      "INSERT INTO cursor_user_state(email,user_id,online,last_seen,host,platform) VALUES (?,?,?,?,?,?) " +
+        "ON DUPLICATE KEY UPDATE online=VALUES(online),last_seen=VALUES(last_seen),host=VALUES(host),platform=VALUES(platform)",
+      req.email, req.userId, true, OffsetDateTime.now(), req.host, req.platform
+    );
+    return ResponseEntity.ok().build();
+  }
+
+  public static class OfflineRequest {
+    public Long userId;
+    public String email;
+  }
+
+  @PostMapping("/offline")
+  public ResponseEntity<?> offline(@RequestBody OfflineRequest req) {
+    jdbc.update(
+      "INSERT INTO cursor_user_state(email,user_id,online,last_seen) VALUES (?,?,?,?) " +
+        "ON DUPLICATE KEY UPDATE online=VALUES(online),last_seen=VALUES(last_seen)",
+      req.email, req.userId, false, OffsetDateTime.now()
+    );
     return ResponseEntity.ok().build();
   }
 }
