@@ -25,7 +25,14 @@ const extensionConfig = {
   define: {
     'process.env.NODE_ENV': '"production"'
   },
-  drop: ['console', 'debugger'], // 移除 console 和 debugger 语句
+  drop: ['console', 'debugger'],
+  plugins: [
+    copy({
+      assets: [
+        { from: 'node_modules/sql.js/dist/sql-wasm.wasm', to: './out' }
+      ]
+    })
+  ]
 };
 
 // Build start

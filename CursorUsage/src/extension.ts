@@ -2,6 +2,10 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as cp from 'child_process';
 import axios from 'axios';
+import * as path from 'path';
+import * as fs from 'fs-extra';
+import * as crypto from 'crypto';
+import initSqlJs from 'sql.js';
 
 // ==================== 类型定义 ====================
 interface BillingCycleResponse {
@@ -60,12 +64,20 @@ const BROWSER_URLS = {
 
 // ==================== 工具函数 ====================
 class Utils {
+  static channel?: vscode.OutputChannel;
+  static setChannel(channel: vscode.OutputChannel): void {
+    this.channel = channel;
+  }
   static logWithTime(message: string): void {
     const timestamp = new Date().toLocaleString('en-US', {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
     });
-    console.log(`[${timestamp}] ${message}`);
+    if (this.channel) {
+      this.channel.appendLine(`[${timestamp}] ${message}`);
+    } else {
+      console.log(`[${timestamp}] ${message}`);
+    }
   }
 
   static formatTimestamp(timestamp: number): string {
@@ -314,9 +326,6 @@ class CursorUsageProvider {
     } else {
       this.updateStatusBar();
     }
-
-    this.startAutoRefresh();
-    this.fetchData();
   }
 
   // ==================== 点击处理 ====================
@@ -536,21 +545,155 @@ class ClipboardMonitor {
   }
 }
 
-// ==================== 扩展激活/停用 ====================
+type ComposerEntry = { composerId: string; lastUpdatedAt: number };
+
+class CursorDbMonitor {
+  private interval: NodeJS.Timeout | null = null;
+  private composerState: Map<string, number> = new Map();
+  private wasmPath: string;
+
+  constructor(private context: vscode.ExtensionContext, private triggerRefresh: () => void) {
+    this.wasmPath = vscode.Uri.joinPath(this.context.extensionUri, 'out', 'sql-wasm.wasm').fsPath;
+  }
+
+  private async getCursorStateDbPathForCurrentWorkspace(): Promise<string | null> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) {
+      return null;
+    }
+    const workspaceDir = workspaceFolders[0].uri.fsPath;
+    try {
+      if (!(await fs.pathExists(workspaceDir))) {
+        return null;
+      }
+      const stats = await fs.stat(workspaceDir);
+      const ctime = (stats as any).birthtimeMs || (stats as any).ctimeMs;
+      const normalizedPath = os.platform() === 'win32' ? workspaceDir.replace(/^([A-Z]):/, (_match, letter) => (letter as string).toLowerCase() + ':') : workspaceDir;
+      const hashInput = normalizedPath + Math.floor(ctime).toString();
+      const workspaceId = crypto.createHash('md5').update(hashInput, 'utf8').digest('hex');
+      let baseStoragePath: string;
+      const platform = os.platform();
+      const homeDir = os.homedir();
+      switch (platform) {
+        case 'win32': {
+          const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+          baseStoragePath = path.join(appData, 'Cursor', 'User', 'workspaceStorage');
+          break;
+        }
+        case 'darwin':
+          baseStoragePath = path.join(homeDir, 'Library', 'Application Support', 'Cursor', 'User', 'workspaceStorage');
+          break;
+        default:
+          baseStoragePath = path.join(homeDir, '.config', 'Cursor', 'User', 'workspaceStorage');
+          break;
+      }
+      const stateDbPath = path.join(baseStoragePath, workspaceId, 'state.vscdb');
+      if (await fs.pathExists(stateDbPath)) {
+        return stateDbPath;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async queryComposerData(stateDbPath: string): Promise<string | null> {
+    const SQL = await initSqlJs({ locateFile: () => this.wasmPath });
+    const fileBuffer = await fs.readFile(stateDbPath);
+    const db = new SQL.Database(fileBuffer);
+    const res = db.exec("SELECT value FROM ItemTable WHERE key = 'composer.composerData';");
+    if (res && res.length > 0 && res[0].values && res[0].values.length > 0) {
+      const val = res[0].values[0][0];
+      return typeof val === 'string' ? val : JSON.stringify(val);
+    }
+    return null;
+  }
+
+  private detectComposerChanges(prev: Map<string, number>, next: ComposerEntry[]) {
+    const added: ComposerEntry[] = [];
+    const updated: { composerId: string; from: number; to: number }[] = [];
+    for (const c of next) {
+      const prevVal = prev.get(c.composerId);
+      if (prevVal === undefined) {
+        added.push(c);
+      } else if (prevVal !== c.lastUpdatedAt) {
+        updated.push({ composerId: c.composerId, from: prevVal, to: c.lastUpdatedAt });
+      }
+    }
+    const changed = added.length > 0 || updated.length > 0;
+    return { changed, added, updated };
+  }
+
+  private async tick(): Promise<void> {
+    try {
+      const dbPath = await this.getCursorStateDbPathForCurrentWorkspace();
+      if (!dbPath) {
+        return;
+      }
+      const value = await this.queryComposerData(dbPath);
+      if (!value) {
+        return;
+      }
+      let parsed: any;
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        return;
+      }
+      const list: ComposerEntry[] = Array.isArray(parsed?.allComposers)
+        ? parsed.allComposers
+            .map((x: any) => ({ composerId: String(x?.composerId), lastUpdatedAt: Number(x?.lastUpdatedAt) }))
+            .filter((x: ComposerEntry) => !!x.composerId && !Number.isNaN(x.lastUpdatedAt))
+        : [];
+      const { changed, added, updated } = this.detectComposerChanges(this.composerState, list);
+      if (changed) {
+        if (added.length > 0) {
+          Utils.logWithTime(`[CursorDB] ADD: ${added.map(a => `${a.composerId}@${a.lastUpdatedAt}`).join(', ')}`);
+        }
+        if (updated.length > 0) {
+          Utils.logWithTime(`[CursorDB] UPDATE: ${updated.map(u => `${u.composerId}:${u.from}->${u.to}`).join(', ')}`);
+        }
+        this.composerState = new Map(list.map(c => [c.composerId, c.lastUpdatedAt]));
+        this.triggerRefresh();
+      }
+    } catch (e: any) {
+      Utils.logWithTime(`[CursorDB] FAILED: ${e?.message ?? e}`);
+    }
+  }
+
+  public async refresh(): Promise<void> {
+    await this.tick();
+  }
+
+  public async start(): Promise<void> {
+    await this.tick();
+    this.interval = setInterval(() => this.tick(), 5000);
+  }
+
+  public stop(): void {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
+}
+
 export function activate(context: vscode.ExtensionContext) {
+  const logChannel = vscode.window.createOutputChannel('Cursor Usage');
+  context.subscriptions.push(logChannel);
+  Utils.setChannel(logChannel);
   Utils.logWithTime('Cursor Usage Monitor extension is now active.');
-  
   const provider = new CursorUsageProvider(context);
   const clipboardMonitor = new ClipboardMonitor();
+  const dbMonitor = new CursorDbMonitor(context, () => provider.fetchData());
+  dbMonitor.start();
 
-  // 注册命令
   const commands = [
     vscode.commands.registerCommand('cursorUsage.refresh', () => provider.refresh()),
     vscode.commands.registerCommand('cursorUsage.handleStatusBarClick', () => provider.handleStatusBarClick()),
     vscode.commands.registerCommand('cursorUsage.updateSession', showUpdateSessionDialog)
   ];
 
-  // 注册监听器
   const listeners = [
     vscode.window.onDidChangeWindowState(async (e) => {
       if (e.focused) {
@@ -560,7 +703,10 @@ export function activate(context: vscode.ExtensionContext) {
   ];
 
   context.subscriptions.push(...commands, ...listeners, {
-    dispose: () => provider.dispose()
+    dispose: () => {
+      dbMonitor.stop();
+      provider.dispose();
+    }
   });
 }
 
