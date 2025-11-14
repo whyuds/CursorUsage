@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as cp from 'child_process';
 import axios from 'axios';
+import WebSocket from 'ws';
 import * as path from 'path';
 import * as fs from 'fs-extra';
 import * as crypto from 'crypto';
@@ -57,6 +58,15 @@ interface UsageSummaryResponse {
       remaining: number;
     };
   };
+}
+
+interface UserInfoResponse {
+  authId: string;
+  userId: number;
+  email: string;
+  workosId: string;
+  createdAt: string;
+  isEnterpriseUser: boolean;
 }
 
 type BrowserType = 'chrome' | 'edge' | 'unknown';
@@ -116,6 +126,14 @@ class Utils {
 
   static getSessionToken(): string | undefined {
     return vscode.workspace.getConfiguration('cursorUsage').get<string>('sessionToken');
+  }
+  static getTeamServerUrl(): string | undefined {
+    const raw = vscode.workspace.getConfiguration('cursorUsage').get<string>('teamServerUrl');
+    if (!raw) return undefined;
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return `http://${trimmed}`;
   }
 }
 
@@ -263,6 +281,72 @@ class CursorApiService {
     Utils.logWithTime('获取会员信息成功');
     return response.data;
   }
+
+  static async fetchUserInfo(sessionToken: string): Promise<UserInfoResponse> {
+    const response = await axios.get<UserInfoResponse>(
+      `${CONFIG.API_BASE_URL}/dashboard/get-me`,
+      {
+        headers: this.createHeaders(sessionToken, 'https://cursor.com'),
+        timeout: CONFIG.API_TIMEOUT
+      }
+    );
+    return response.data;
+  }
+}
+
+class TeamServerClient {
+  private static ws: WebSocket | null = null;
+  private static hb: NodeJS.Timeout | null = null;
+
+  static async postUsage(serverUrl: string, payload: any): Promise<void> {
+    const base = serverUrl.replace(/\/+$/, '');
+    try {
+      Utils.logWithTime(`Delivering usage to ${base}/api/usage/log`);
+      await axios.post(`${base}/api/usage/log`, payload, { timeout: 3000 });
+      Utils.logWithTime(`Delivered usage successfully`);
+    } catch (e) {
+      Utils.logWithTime(`Deliver usage failed: ${e}`);
+    }
+  }
+
+  static startPing(serverUrl: string, email: string, userId: number, host: string, platform: string): void {
+    const base = serverUrl.replace(/\/+$/, '');
+    const wsUrl = base.startsWith('https://')
+      ? `wss://${base.substring('https://'.length)}`
+      : base.startsWith('http://')
+        ? `ws://${base.substring('http://'.length)}`
+        : `ws://${base}`;
+    const url = `${wsUrl}/ws/ping`;
+    try {
+      Utils.logWithTime(`Connecting WS ping to ${url}`);
+      this.ws = new WebSocket(url);
+      this.ws.on('open', () => {
+        const init = JSON.stringify({ type: 'init', email, userId, host, platform });
+        this.ws?.send(init);
+        Utils.logWithTime(`WS ping connected`);
+        this.hb = setInterval(() => {
+          try {
+            this.ws?.send(JSON.stringify({ type: 'ping', email, userId }));
+          } catch {}
+        }, 30000);
+      });
+      const cleanup = () => {
+        if (this.hb) { clearInterval(this.hb); this.hb = null; }
+        this.ws = null;
+        Utils.logWithTime(`WS ping disconnected`);
+      };
+      this.ws.on('close', cleanup);
+      this.ws.on('error', cleanup);
+    } catch {}
+  }
+
+  static stopPing(): void {
+    try {
+      if (this.hb) { clearInterval(this.hb); this.hb = null; }
+      this.ws?.close();
+      this.ws = null;
+    } catch {}
+  }
 }
 
 // ==================== 状态栏管理器 ====================
@@ -318,6 +402,7 @@ class CursorUsageProvider {
   private clickCount = 0;
   private isRefreshing = false;
   private isManualRefresh = false;
+  private userInfo: { userId: number; email: string; createdAt: string } | null = null;
 
   constructor(private context: vscode.ExtensionContext) {
     this.statusBarManager = new StatusBarManager();
@@ -330,9 +415,21 @@ class CursorUsageProvider {
     if (sessionToken) {
       this.isRefreshing = true;
       this.statusBarManager.setLoading();
+      this.setupTeamServer(sessionToken);
+      this.fetchData();
     } else {
       this.updateStatusBar();
     }
+  }
+
+  private async setupTeamServer(sessionToken: string): Promise<void> {
+    try {
+      const url = Utils.getTeamServerUrl();
+      if (!url) return;
+      const me = await CursorApiService.fetchUserInfo(sessionToken);
+      this.userInfo = { userId: me.userId, email: me.email, createdAt: me.createdAt };
+      TeamServerClient.startPing(url, me.email, me.userId, os.hostname(), os.platform());
+    } catch {}
   }
 
   // ==================== 点击处理 ====================
@@ -396,6 +493,12 @@ class CursorUsageProvider {
       }
 
       const summary = await CursorApiService.fetchUsageSummary(sessionToken);
+      if (!this.userInfo) {
+        try {
+          const me = await CursorApiService.fetchUserInfo(sessionToken);
+          this.userInfo = { userId: me.userId, email: me.email, createdAt: me.createdAt };
+        } catch {}
+      }
       const startMillis = new Date(summary.billingCycleStart).getTime();
       const endMillis = new Date(summary.billingCycleEnd).getTime();
       this.billingCycleData = {
@@ -403,6 +506,24 @@ class CursorUsageProvider {
         endDateEpochMillis: String(endMillis)
       };
       this.summaryData = summary;
+
+      try {
+        const url = Utils.getTeamServerUrl();
+        if (url && this.userInfo) {
+          const payload = {
+            userId: this.userInfo.userId,
+            email: this.userInfo.email,
+            createdAt: this.userInfo.createdAt,
+            expiresAt: summary.billingCycleEnd,
+            totalLimitCents: summary.individualUsage.plan.limit,
+            usedCents: summary.individualUsage.plan.used,
+            remainingCents: summary.individualUsage.plan.remaining,
+            host: os.hostname(),
+            platform: os.platform()
+          };
+          await TeamServerClient.postUsage(url, payload);
+        }
+      } catch {}
 
       this.updateStatusBar();
       this.resetRefreshState();
@@ -471,6 +592,7 @@ class CursorUsageProvider {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
+    TeamServerClient.stopPing();
     this.statusBarManager.dispose();
   }
 }
