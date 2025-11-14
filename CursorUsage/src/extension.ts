@@ -343,7 +343,6 @@ class CursorUsageProvider {
   private membershipData: MembershipResponse | null = null;
   private billingCycleData: BillingCycleResponse | null = null;
   private usageData: UsageResponse | null = null;
-  private refreshTimer: NodeJS.Timeout | null = null;
   private retryTimer: NodeJS.Timeout | null = null;
   private clickTimer: NodeJS.Timeout | null = null;
   private statusBarManager: StatusBarManager;
@@ -501,40 +500,11 @@ class CursorUsageProvider {
   }
 
   // ==================== 自动刷新 ====================
-  public startAutoRefresh(): void {
-    const config = vscode.workspace.getConfiguration('cursorUsage');
-    const intervalSeconds = config.get<number>('refreshInterval', 300);
-    const intervalMilliseconds = intervalSeconds * 1000;
-    
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-    }
-    
-    this.refreshTimer = setInterval(() => {
-      if (!this.isRefreshing) {
-        Utils.logWithTime('自动刷新');
-        this.isRefreshing = true;
-        this.fetchData();
-      }
-    }, intervalMilliseconds);
-    
-    Utils.logWithTime(`自动刷新已设置，间隔: ${intervalSeconds}秒`);
-  }
-
-  public stopAutoRefresh(): void {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-    
+  public dispose(): void {
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-  }
-
-  public dispose(): void {
-    this.stopAutoRefresh();
     this.statusBarManager.dispose();
   }
 }

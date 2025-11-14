@@ -40,11 +40,6 @@
           "type": "string",
           "default": "",
           "description": "The WorkosCursorSessionToken value from Cursor.com cookies"
-        },
-        "cursorUsage.refreshInterval": {
-          "type": "number",
-          "default": 300,
-          "description": "Interval in seconds to refresh usage data automatically"
         }
       }
     }
